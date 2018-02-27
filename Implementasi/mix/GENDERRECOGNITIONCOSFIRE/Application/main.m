@@ -79,7 +79,7 @@ datacnncosfire.testing.labels = data.testing.labels;
 % Training classification SVM models
 SVMModelCNN = fitcsvm(datacnn.training.features,datacnn.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
 SVMModelCOSFIRE = fitcsvm(data.training.desc,data.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
-SVMModelCOSFIREANDCNN = fitcsvm(data.training.mergedfeatures',data.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
+SVMModelCOSFIREANDCNN = fitcsvm(datacnncosfire.training.features',datacnncosfire.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
 
 % Evaluate classifier
 accuracy_cnn = evaluateclassifier(SVMModelCNN,datacnn);
