@@ -1,11 +1,5 @@
 function [imdstraining, imdstest] = getdataset(dirlist)
-
-% datasetdir = fullfile(pwd,'GENDER-FERET');
-% maletrainingfolder = fullfile(fullfile(datasetdir, 'male'),'training_set');
-% femaletrainingfolder = fullfile(fullfile(datasetdir, 'female'),'training_set');
-% maletestfolder = fullfile(fullfile(datasetdir, 'male'),'test_set');
-% femaletestfolder = fullfile(fullfile(datasetdir, 'female'),'test_set');
-
+% Set path for each training and test set
 imdsmaletraining = imageDatastore(dirlist.trainingmaledir);
 imdsmaletraining.Labels = ones(length(imdsmaletraining.Files),1);
 
