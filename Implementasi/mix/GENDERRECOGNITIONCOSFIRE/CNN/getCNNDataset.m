@@ -1,4 +1,4 @@
-function [imdstraining, imdstest] = getdataset(dirlist)
+function [imdstraining, imdstest] = getCNNDataset(dirlist,size)
 % Set path for each training and test set
 imdsmaletraining = imageDatastore(dirlist.trainingmaledir);
 imdsmaletraining.Labels = ones(length(imdsmaletraining.Files),1);
@@ -25,7 +25,7 @@ imdstraining.Labels = categorical(imdstraining.Labels);
 imdstest.Labels = categorical(imdstest.Labels);
 
 % Set each ImageDatastore ReadFcn
-imdstraining.ReadFcn = @(filename)readAndPreprocessImage(filename);
-imdstest.ReadFcn = @(filename)readAndPreprocessImage(filename);
+imdstraining.ReadFcn = @(filename)readAndPreprocessCNNImage(filename,size);
+imdstest.ReadFcn = @(filename)readAndPreprocessCNNImage(filename,size);
 end
 

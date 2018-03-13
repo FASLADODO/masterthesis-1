@@ -28,14 +28,11 @@ if ~exist(outdir)
     mkdir(outdir);
 end
 
+%======================= COSFIRE ==========================
 % Load the dataset and, if needed, perform face detection and resize. If
 % the faces are already available, they are loaded from the file 'dataset.mat'. 
 datasetCOSFIRE = getDataset(dataFolder,dirlist,doFaceDetection,resizeWidth);
 
-% Load dataset needed for CNN
-[trainingSet, testSet] = getdataset(dirlist);
-
-%======================= COSFIRE ==========================
 % Configure the COSFIRE operators. If the operators are already available, 
 % they are loaded from the file 'operatorlist.mat'. 
 operatorlist = getCOSFIREoperators(outdir,datasetCOSFIRE,noperatorspergender);
@@ -53,40 +50,57 @@ data = normalizeData(data,numel(operatorlist));
 data.training.features = data.training.desc';
 data.testing.features = data.testing.desc';
 
+% Training classification SVM models with Chi-Squared Kernel
+[model.pyramid, kernel.training] = trainCOSFIREPyramidModel(outdir,data,numel(operatorlist));
+
+% Evaluate test data with SVM models
+[result.info, kernel.testing, result.svmscore] = testCOSFIREPyramidModel(outdir,data,numel(operatorlist),model.pyramid);
+accuracycosfire = result.info{16};
+fprintf('Recognition Rate: %2.6f\n',accuracycosfire);
+
 %===================== CNN ====================================
-%Load pre-trained AlexNet
-net = alexnet();
-% View the CNN architecture
-net.Layers;
-% Extract Training Features from the last layer of CNN
-featureLayer = 'fc7';
-datacnn.training.features = activations(net, trainingSet, featureLayer,'MiniBatchSize', 32, 'OutputAs', 'columns');
-datacnn.training.features = double(datacnn.training.features)';
-% Get training labels from the trainingSet
-datacnn.training.labels = double(trainingSet.Labels);
-% Extract test features using the CNN
-datacnn.testing.features = activations(net, testSet, featureLayer, 'MiniBatchSize',32);
-datacnn.testing.features = double(datacnn.testing.features);
-% Get the known labels
-datacnn.testing.labels = double(testSet.Labels);
+cnnType = 'custom';
+[accuracycnn, datacnn] = extractCNNFeatures(dataFolder,dirlist,cnnType);
 
-%==================== MERGE COSFIRE AND CNN FEATURES ===================
-datacnncosfire.training.features = [data.training.desc';datacnn.training.features'];
-datacnncosfire.testing.features = [data.testing.desc';datacnn.testing.features];
-datacnncosfire.training.labels = data.training.labels;
-datacnncosfire.testing.labels = data.testing.labels;
+% Merge features CNN and COSFIRE
+datacnncosfire.training.features = [datacnn.training.features';data.training.desc'];
+datacnncosfire.training.features = datacnncosfire.training.features';
+datacnncosfire.training.normalizedfeatures = [datacnn.training.normalizedfeatures';data.training.desc'];
+datacnncosfire.training.normalizedfeatures = datacnncosfire.training.normalizedfeatures';
 
-% Training classification SVM models
-SVMModelCNN = fitcsvm(datacnn.training.features,datacnn.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
-SVMModelCOSFIRE = fitcsvm(data.training.desc,data.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
-SVMModelCOSFIREANDCNN = fitcsvm(datacnncosfire.training.features',datacnncosfire.training.labels,'Standardize',true,'KernelFunction','RBF','KernelScale','auto');
+datacnncosfire.testing.features = [datacnn.testing.features';data.testing.desc'];
+datacnncosfire.testing.features = datacnncosfire.testing.features';
+datacnncosfire.testing.normalizedfeatures = [datacnn.testing.normalizedfeatures';data.testing.desc'];
+datacnncosfire.testing.normalizedfeatures = datacnncosfire.testing.normalizedfeatures';
 
-% Evaluate classifier
-accuracy_cnn = evaluateclassifier(SVMModelCNN,datacnn);
-accuracy_cosfire = evaluateclassifier(SVMModelCOSFIRE,data);
-accuracy_cnncosfire = evaluateclassifier(SVMModelCOSFIREANDCNN,datacnncosfire);
+datacnncosfire.training.labels = datacnn.training.labels;
+datacnncosfire.testing.labels = datacnn.testing.labels;
 
-% Plot Accuracy
-x = categorical({'CNN','COSFIRE','CNN&COSFIRE'});
-y = [accuracy_cnn accuracy_cosfire accuracy_cnncosfire];
+%============================ Train SVM ==============================
+% Fit Image Classifier CNN
+classifierCNN = fitcecoc(datacnn.training.features,datacnn.training.labels);
+predictedCNNLabels = predict(classifierCNN,datacnn.testing.features);
+accuracyCNN = mean(predictedCNNLabels == datacnn.testing.labels);
+fprintf('\nOriginal CNN accuracy %d',accuracyCNN);
+
+% Fit Image Classifier CNN
+classifierNormalizedCNN = fitcecoc(datacnn.training.normalizedfeatures,datacnn.training.labels);
+predictedNormalizedCNNLabels = predict(classifierNormalizedCNN,datacnn.testing.normalizedfeatures);
+accuracyNormalizedCNN = mean(predictedNormalizedCNNLabels == datacnn.testing.labels);
+fprintf('\nNormalized CNN accuracy %d',accuracyNormalizedCNN);
+
+% Fit Image Classifier CNNCOSFIRE
+classifierCNNCOSFIRE = fitcecoc(datacnncosfire.training.features,datacnncosfire.training.labels);
+predictedCNNCSOFIRELabels = predict(classifierCNNCOSFIRE,datacnncosfire.testing.features);
+accuracyCNNCOSFIRE = mean(predictedCNNCSOFIRELabels == datacnncosfire.testing.labels);
+fprintf('\nCNNCSOFIRE accuracy %d\n',accuracyCNNCOSFIRE);
+
+classifierNormalizedCNNCOSFIRE = fitcecoc(datacnncosfire.training.normalizedfeatures,datacnncosfire.training.labels);
+predictedNormalizedCNNCSOFIRELabels = predict(classifierNormalizedCNNCOSFIRE,datacnncosfire.testing.normalizedfeatures);
+accuracyNormalizedCNNCOSFIRE = mean(predictedNormalizedCNNCSOFIRELabels == datacnncosfire.testing.labels);
+fprintf('\nNormalized CNNCSOFIRE accuracy %d\n',accuracyNormalizedCNNCOSFIRE);
+
+% Plot Accuracy of all models
+x = categorical({'Original CNN', 'Normalized CNN','COSFIRE','Original CNN&COSFIRE', 'Normalized CNN&COSFIRE'});
+y = [accuracyCNN accuracyNormalizedCNN accuracycosfire accuracyCNNCOSFIRE accuracyNormalizedCNNCOSFIRE];
 bar(x,y)
